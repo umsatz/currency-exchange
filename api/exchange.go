@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"encoding/xml"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -21,11 +22,24 @@ func logHandler(next http.Handler) http.HandlerFunc {
 	}
 }
 
+var dataDirectory string
+
+func init() {
+	flag.StringVar(&dataDirectory, "data", "", "path to data directory")
+	flag.Parse()
+
+	if fileInfo, err := os.Stat(dataDirectory); err != nil {
+		log.Fatalf(`unable to stat %v: %v`, dataDirectory, err)
+	} else if !fileInfo.IsDir() {
+		log.Fatalf(`%v is no directory`, dataDirectory)
+	}
+}
+
 func LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	vars := mux.Vars(req)
 
-	handle, err := os.OpenFile(fmt.Sprintf(`./data/%v.xml`, vars["date"]), os.O_RDONLY, 0660)
+	handle, err := os.OpenFile(fmt.Sprintf(`%v/%v.xml`, dataDirectory, vars["date"]), os.O_RDONLY, 0660)
 	if err != nil {
 		fmt.Printf("unable to open file: %#v", err)
 		w.WriteHeader(http.StatusBadRequest)
