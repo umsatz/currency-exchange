@@ -11,6 +11,7 @@ import (
 	"os"
 
 	"github.com/gorilla/mux"
+	. "github.com/umsatz/currency-exchange/data"
 )
 
 func logHandler(next http.Handler) http.HandlerFunc {
