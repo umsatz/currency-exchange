@@ -39,6 +39,6 @@ type Cube struct {
 }
 
 type Exchange struct {
-	Currency string  `xml:"currency,attr" json:"currency"`
-	Rate     float32 `xml:"rate,attr" json:"rate"`
+	Currency string  `xml:"currency,attr"`
+	Rate     float32 `xml:"rate,attr"`
 }
