@@ -16,13 +16,6 @@ import (
 	. "github.com/umsatz/currency-exchange/data"
 )
 
-func logHandler(next http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%v %v", r.Method, r.URL.Path)
-		next.ServeHTTP(w, r)
-	}
-}
-
 var dataDirectory string
 
 func init() {
@@ -109,6 +102,13 @@ func ListCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 	}
 
 	io.WriteString(w, string(bytes))
+}
+
+func logHandler(next http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("%v %v", r.Method, r.URL.Path)
+		next.ServeHTTP(w, r)
+	}
 }
 
 func main() {
