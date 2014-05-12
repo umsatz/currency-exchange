@@ -14,18 +14,23 @@ import (
 
 var historyFile string
 var outputDirectory string
+var importCount int = 0
 
 func WriteXML(env *Envelop) error {
-	// TODO do not over-write existing files
 	dataFileName := fmt.Sprintf("%v/%v.xml", outputDirectory, time.Time(env.Cubes[0].Date).Format("2006-01-02"))
-	file, err := os.OpenFile(dataFileName, os.O_RDWR|os.O_CREATE, 0660)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
 
-	encoder := xml.NewEncoder(file)
-	encoder.Encode(env)
+	if _, err := os.Stat(dataFileName); err != nil {
+		file, err := os.OpenFile(dataFileName, os.O_RDWR|os.O_CREATE, 0660)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+
+		encoder := xml.NewEncoder(file)
+		encoder.Encode(env)
+
+		importCount += 1
+	}
 	return nil
 }
 
@@ -33,6 +38,18 @@ func init() {
 	flag.StringVar(&historyFile, "history", "", "path to eurofxref-hist.xml")
 	flag.StringVar(&outputDirectory, "out", "", "path to output directory")
 	flag.Parse()
+
+	if fileInfo, err := os.Stat(historyFile); err != nil {
+		log.Fatalf(`unable to stat %v: %v`, historyFile, err)
+	} else if fileInfo.IsDir() {
+		log.Fatalf(`%v is directory - should be an xml file`, historyFile)
+	}
+
+	if fileInfo, err := os.Stat(outputDirectory); err != nil {
+		os.Mkdir(outputDirectory, os.ModeDir)
+	} else if !fileInfo.IsDir() {
+		log.Fatalf(`%v is no directory`, outputDirectory)
+	}
 }
 
 func main() {
@@ -59,8 +76,6 @@ func main() {
 			wait.Done()
 		}()
 	}
-
-	importCount := len(envelop.Cubes)
 
 	for _, cube := range envelop.Cubes {
 		envelops <- &Envelop{envelop.Subject, envelop.Sender, []Cube{cube}}
