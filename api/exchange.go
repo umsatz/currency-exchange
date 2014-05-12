@@ -30,18 +30,19 @@ func init() {
 	}
 }
 
-type exchangeInfo struct {
-	Date     string  `json:"date"`
+type shortExchangeInfo struct {
 	Currency string  `json:"currency"`
 	Rate     float32 `json:"rate"`
 }
 
-func LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	vars := mux.Vars(req)
+type exchangeInfo struct {
+	Date string `json:"date"`
+	shortExchangeInfo
+}
 
+func LookEnvelop(dateStr string) *Envelop {
 	// correct weekend offset
-	time, err := time.Parse("2006-01-02", vars["date"])
+	time, err := time.Parse("2006-01-02", dateStr)
 	var date string = time.Format("2006-01-02")
 	if time.Weekday() == 0 {
 		date = time.AddDate(0, 0, -2).Format("2006-01-02")
@@ -52,8 +53,7 @@ func LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 	handle, err := os.OpenFile(fmt.Sprintf(`%v/%v.xml`, dataDirectory, date), os.O_RDONLY, 0660)
 	if err != nil {
 		fmt.Printf("unable to open file: %#v", err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		return nil
 	}
 	defer handle.Close()
 
@@ -61,12 +61,23 @@ func LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 	decoder := xml.NewDecoder(handle)
 	if err := decoder.Decode(&envelop); err != nil {
 		fmt.Printf("unable to decode xml")
+		return nil
+	}
+	return &envelop
+}
+
+func LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	vars := mux.Vars(req)
+
+	envelop := LookEnvelop(vars["date"])
+	if envelop == nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	cube := envelop.Cubes[0]
 
 	currency := string(bytes.ToUpper([]byte(vars["currency"])))
-	cube := envelop.Cubes[0]
 	var exchange Exchange
 	for _, ex := range cube.Exchanges {
 		if ex.Currency == currency {
@@ -79,7 +90,7 @@ func LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	info := exchangeInfo{date, exchange.Currency, exchange.Rate}
+	info := exchangeInfo{time.Time(cube.Date).Format("2006-01-02"), shortExchangeInfo{exchange.Currency, exchange.Rate}}
 
 	bytes, err := json.Marshal(info)
 
@@ -91,28 +102,25 @@ func LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 	io.WriteString(w, string(bytes))
 }
 
+type exchangeInfoCollection struct {
+	Date      string              `json:"date"`
+	Exchanges []shortExchangeInfo `json:"exchanges"`
+}
+
 func ListCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	vars := mux.Vars(req)
 
-	handle, err := os.OpenFile(fmt.Sprintf(`%v/%v.xml`, dataDirectory, vars["date"]), os.O_RDONLY, 0660)
-	if err != nil {
-		fmt.Printf("unable to open file: %#v", err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	defer handle.Close()
-
-	envelop := Envelop{}
-	decoder := xml.NewDecoder(handle)
-	if err := decoder.Decode(&envelop); err != nil {
-		fmt.Printf("unable to decode xml")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
+	envelop := LookEnvelop(vars["date"])
 	cube := envelop.Cubes[0]
-	bytes, err := json.Marshal(cube.Exchanges)
+
+	exchangeInfos := make([]shortExchangeInfo, len(cube.Exchanges))
+	for i, info := range cube.Exchanges {
+		exchangeInfos[i] = shortExchangeInfo{info.Currency, info.Rate}
+	}
+
+	infoCollection := exchangeInfoCollection{time.Time(cube.Date).Format("2006-01-02"), exchangeInfos}
+	bytes, err := json.Marshal(infoCollection)
 
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
