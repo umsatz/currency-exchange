@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	time "time"
 
 	"github.com/gorilla/mux"
 	. "github.com/umsatz/currency-exchange/data"
@@ -29,11 +30,26 @@ func init() {
 	}
 }
 
+type exchangeInfo struct {
+	Date     string  `json:"date"`
+	Currency string  `json:"currency"`
+	Rate     float32 `json:"rate"`
+}
+
 func LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	vars := mux.Vars(req)
 
-	handle, err := os.OpenFile(fmt.Sprintf(`%v/%v.xml`, dataDirectory, vars["date"]), os.O_RDONLY, 0660)
+	// correct weekend offset
+	time, err := time.Parse("2006-01-02", vars["date"])
+	var date string = time.Format("2006-01-02")
+	if time.Weekday() == 0 {
+		date = time.AddDate(0, 0, -2).Format("2006-01-02")
+	} else if time.Weekday() == 6 {
+		date = time.AddDate(0, 0, -1).Format("2006-01-02")
+	}
+
+	handle, err := os.OpenFile(fmt.Sprintf(`%v/%v.xml`, dataDirectory, date), os.O_RDONLY, 0660)
 	if err != nil {
 		fmt.Printf("unable to open file: %#v", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -63,7 +79,9 @@ func LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	bytes, err := json.Marshal(exchange)
+	info := exchangeInfo{date, exchange.Currency, exchange.Rate}
+
+	bytes, err := json.Marshal(info)
 
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
