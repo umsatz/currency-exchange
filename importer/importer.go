@@ -32,11 +32,10 @@ func WriteXML(env *Envelop) error {
 func init() {
 	flag.StringVar(&historyFile, "history", "", "path to eurofxref-hist.xml")
 	flag.StringVar(&outputDirectory, "out", "", "path to output directory")
+	flag.Parse()
 }
 
 func main() {
-	flag.Parse()
-
 	handle, err := os.Open(historyFile)
 	if err != nil {
 		log.Fatalf(`unable to open history file: %#v`, err)
