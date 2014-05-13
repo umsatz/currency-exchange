@@ -150,7 +150,7 @@ func main() {
 	log.Println("listening on %v", l.Addr())
 
 	r := mux.NewRouter()
-	r.Handle("/rates/{date}/{currency}", logHandler(http.HandlerFunc(LookupCurrencyExchange))).Methods("GET")
-	r.Handle("/rates/{date}", logHandler(http.HandlerFunc(ListCurrencyExchange))).Methods("GET")
+	r.Handle("/{date}/{currency}", logHandler(http.HandlerFunc(LookupCurrencyExchange))).Methods("GET")
+	r.Handle("/{date}", logHandler(http.HandlerFunc(ListCurrencyExchange))).Methods("GET")
 	http.Serve(l, r)
 }
