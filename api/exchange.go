@@ -79,9 +79,14 @@ func LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 
 	currency := string(bytes.ToUpper([]byte(vars["currency"])))
 	var exchange Exchange
-	for _, ex := range cube.Exchanges {
-		if ex.Currency == currency {
-			exchange = ex
+	if currency == "EUR" {
+		exchange.Currency = "EUR"
+		exchange.Rate = 1.0
+	} else {
+		for _, ex := range cube.Exchanges {
+			if ex.Currency == currency {
+				exchange = ex
+			}
 		}
 	}
 
