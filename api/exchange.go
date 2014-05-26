@@ -40,8 +40,8 @@ type exchangeInfo struct {
 	shortExchangeInfo
 }
 
-func LookEnvelop(dateStr string) *Envelop {
-	// correct weekend offset
+func lookEnvelop(dateStr string) *Envelop {
+	// correct weekend offset, as we miss data for those
 	time, err := time.Parse("2006-01-02", dateStr)
 	var date string = time.Format("2006-01-02")
 	if time.Weekday() == 0 {
@@ -70,7 +70,7 @@ func LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	vars := mux.Vars(req)
 
-	envelop := LookEnvelop(vars["date"])
+	envelop := lookEnvelop(vars["date"])
 	if envelop == nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -116,7 +116,7 @@ func ListCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	vars := mux.Vars(req)
 
-	envelop := LookEnvelop(vars["date"])
+	envelop := lookEnvelop(vars["date"])
 	cube := envelop.Cubes[0]
 
 	exchangeInfos := make([]shortExchangeInfo, len(cube.Exchanges))
@@ -142,6 +142,47 @@ func logHandler(next http.Handler) http.HandlerFunc {
 	}
 }
 
+var earliestTimestamp time.Time = time.Date(1999, 1, 4, 0, 0, 0, 0, time.UTC)
+
+func ValidateRequestedDate(next http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		vars := mux.Vars(req)
+		date, err := time.Parse("2006-01-02", vars["date"])
+
+		if err != nil {
+			bytes, _ := json.Marshal(map[string][]string{
+				"errors": []string{"parameter 'date' has an invalid format. please use YYYY-MM-DD."},
+			})
+
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, string(bytes))
+			return
+		}
+
+		if date.Before(earliestTimestamp) {
+			bytes, _ := json.Marshal(map[string][]string{
+				"errors": []string{"Given date is earlier than Jan 4th, 1999. No data available"},
+			})
+
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, string(bytes))
+			return
+		}
+
+		if date.After(time.Now()) {
+			bytes, _ := json.Marshal(map[string][]string{
+				"errors": []string{"Given date is in the future. No data available"},
+			})
+
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, string(bytes))
+			return
+		}
+
+		next.ServeHTTP(w, req)
+	}
+}
+
 func main() {
 	var port string = os.Getenv("PORT")
 	if port == "" {
@@ -155,7 +196,7 @@ func main() {
 	log.Println("listening on %v", l.Addr())
 
 	r := mux.NewRouter()
-	r.Handle("/{date}/{currency}", logHandler(http.HandlerFunc(LookupCurrencyExchange))).Methods("GET")
-	r.Handle("/{date}", logHandler(http.HandlerFunc(ListCurrencyExchange))).Methods("GET")
+	r.Handle("/{date}/{currency}", logHandler(ValidateRequestedDate(http.HandlerFunc(LookupCurrencyExchange)))).Methods("GET")
+	r.Handle("/{date}", logHandler(ValidateRequestedDate(http.HandlerFunc(ListCurrencyExchange)))).Methods("GET")
 	http.Serve(l, r)
 }

@@ -9,7 +9,7 @@ $ exchange -data=/path/to/imported/data
 ```
 
 ```
-  curl http://localhost:8080/rates/2013-02-20  /USD
+  curl http://localhost:8080/rates/2013-02-20/USD
   {
     "date": "2013-02-20",
     "currency": "USD",
