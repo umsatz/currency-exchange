@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	time "time"
@@ -17,17 +16,8 @@ import (
 	. "github.com/umsatz/currency-exchange/data"
 )
 
-var dataDirectory string
-
-func init() {
-	flag.StringVar(&dataDirectory, "data", "", "path to data directory")
-	flag.Parse()
-
-	if fileInfo, err := os.Stat(dataDirectory); err != nil {
-		log.Fatalf(`unable to stat %v: %v`, dataDirectory, err)
-	} else if !fileInfo.IsDir() {
-		log.Fatalf(`%v is no directory`, dataDirectory)
-	}
+type fileSystemProvider struct {
+	dataDirectory string
 }
 
 type shortExchangeInfo struct {
@@ -40,7 +30,7 @@ type exchangeInfo struct {
 	shortExchangeInfo
 }
 
-func lookEnvelop(dateStr string) *Envelop {
+func (provider *fileSystemProvider) lookEnvelop(dateStr string) *Envelop {
 	// correct weekend offset, as we miss data for those
 	time, err := time.Parse("2006-01-02", dateStr)
 	var date string = time.Format("2006-01-02")
@@ -50,12 +40,12 @@ func lookEnvelop(dateStr string) *Envelop {
 		date = time.AddDate(0, 0, -1).Format("2006-01-02")
 	}
 
-	handle, err := os.OpenFile(fmt.Sprintf(`%v/%v.xml`, dataDirectory, date), os.O_RDONLY, 0660)
+	handle, err := os.OpenFile(fmt.Sprintf(`%v/%v.xml`, provider.dataDirectory, date), os.O_RDONLY, 0660)
 	if err != nil {
 		// we might also miss german holiday informations, try to correct those
 		for i := 0; i < 5; i++ {
 			date = time.AddDate(0, 0, i*-1).Format("2006-01-02")
-			handle, err = os.OpenFile(fmt.Sprintf(`%v/%v.xml`, dataDirectory, date), os.O_RDONLY, 0660)
+			handle, err = os.OpenFile(fmt.Sprintf(`%v/%v.xml`, provider.dataDirectory, date), os.O_RDONLY, 0660)
 			if err == nil {
 				break
 			}
@@ -76,11 +66,11 @@ func lookEnvelop(dateStr string) *Envelop {
 	return &envelop
 }
 
-func LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
+func (provider *fileSystemProvider) LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	vars := mux.Vars(req)
 
-	envelop := lookEnvelop(vars["date"])
+	envelop := provider.lookEnvelop(vars["date"])
 	if envelop == nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -122,11 +112,11 @@ type exchangeInfoCollection struct {
 	Exchanges []shortExchangeInfo `json:"exchanges"`
 }
 
-func ListCurrencyExchange(w http.ResponseWriter, req *http.Request) {
+func (provider *fileSystemProvider) ListCurrencyExchange(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	vars := mux.Vars(req)
 
-	envelop := lookEnvelop(vars["date"])
+	envelop := provider.lookEnvelop(vars["date"])
 	cube := envelop.Cubes[0]
 
 	exchangeInfos := make([]shortExchangeInfo, len(cube.Exchanges))
@@ -194,19 +184,24 @@ func ValidateRequestedDate(next http.Handler) http.HandlerFunc {
 }
 
 func main() {
-	var port string = os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	var (
+		httpAddress   = flag.String("http.addr", ":8080", "HTTP listen address")
+		dataDirectory = flag.String("data", "", "path to data directory")
+	)
+	flag.Parse()
+
+	if fileInfo, err := os.Stat(*dataDirectory); err != nil {
+		log.Fatalf(`unable to stat %v: %v`, *dataDirectory, err)
+	} else if !fileInfo.IsDir() {
+		log.Fatalf(`%v is no directory`, *dataDirectory)
 	}
 
-	l, err := net.Listen("tcp", "0.0.0.0:"+port)
-	if nil != err {
-		log.Fatalln(err)
-	}
-	log.Println("listening on %v", l.Addr())
+	provider := fileSystemProvider{*dataDirectory}
 
 	r := mux.NewRouter()
-	r.Handle("/{date}/{currency}", logHandler(ValidateRequestedDate(http.HandlerFunc(LookupCurrencyExchange)))).Methods("GET")
-	r.Handle("/{date}", logHandler(ValidateRequestedDate(http.HandlerFunc(ListCurrencyExchange)))).Methods("GET")
-	http.Serve(l, r)
+	r.Handle("/{date}/{currency}", logHandler(ValidateRequestedDate(http.HandlerFunc(provider.LookupCurrencyExchange)))).Methods("GET")
+	r.Handle("/{date}", logHandler(ValidateRequestedDate(http.HandlerFunc(provider.ListCurrencyExchange)))).Methods("GET")
+
+	log.Printf("listening on %s", *httpAddress)
+	log.Fatal(http.ListenAndServe(*httpAddress, http.Handler(r)))
 }
