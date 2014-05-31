@@ -52,8 +52,18 @@ func lookEnvelop(dateStr string) *Envelop {
 
 	handle, err := os.OpenFile(fmt.Sprintf(`%v/%v.xml`, dataDirectory, date), os.O_RDONLY, 0660)
 	if err != nil {
-		fmt.Printf("unable to open file: %#v", err)
-		return nil
+		// we might also miss german holiday informations, try to correct those
+		for i := 0; i < 5; i++ {
+			date = time.AddDate(0, 0, i*-1).Format("2006-01-02")
+			handle, err = os.OpenFile(fmt.Sprintf(`%v/%v.xml`, dataDirectory, date), os.O_RDONLY, 0660)
+			if err == nil {
+				break
+			}
+		}
+		if err != nil {
+			fmt.Printf("unable to open file: %#v", err)
+			return nil
+		}
 	}
 	defer handle.Close()
 
