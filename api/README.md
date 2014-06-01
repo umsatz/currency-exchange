@@ -5,7 +5,7 @@ Actual JSON api for currency exchange rates.
 To run:
 
 ```
-$ exchange -data=/path/to/imported/data
+$ exchange -data=/path/to/imported/data -http.addr=:8080
 ```
 
 ```
