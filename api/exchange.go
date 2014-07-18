@@ -96,15 +96,11 @@ func (provider *fileSystemProvider) LookupCurrencyExchange(w http.ResponseWriter
 	}
 
 	info := exchangeInfo{time.Time(cube.Date).Format("2006-01-02"), shortExchangeInfo{exchange.Currency, exchange.Rate}}
+	enc := json.NewEncoder(w)
 
-	bytes, err := json.Marshal(info)
-
-	if err != nil {
+	if err := enc.Encode(info); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		return
 	}
-
-	io.WriteString(w, string(bytes))
 }
 
 type exchangeInfoCollection struct {
