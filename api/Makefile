@@ -7,9 +7,10 @@ LDFLAGS    := -ldflags \
 
 GOOS       := $(shell go env GOOS)
 GOARCH     := $(shell go env GOARCH)
-GOBUILD    := GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(LDFLAGS)
+GOBUILD    := GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o dist/api $(LDFLAGS)
+GOFILES    := $(shell find . -name "*.go" -exec echo {}  \; | sed -e s/.\\/// | grep -ve test)
 
-ARCHIVE    := currency-api-$(VERSION)-$(GOOS)-$(GOARCH).tar.gz
+ARCHIVE    := umsatz-$(VERSION)-$(GOOS)-$(GOARCH).tar.gz
 DISTDIR    := dist/$(GOOS)_$(GOARCH)
 
 .PHONY: default archive clean install

@@ -13,7 +13,7 @@ import (
 	time "time"
 
 	"github.com/gorilla/mux"
-	. "github.com/umsatz/currency-exchange/data"
+	data "github.com/umsatz/currency-exchange/data"
 )
 
 type fileSystemProvider struct {
@@ -30,7 +30,7 @@ type exchangeInfo struct {
 	shortExchangeInfo
 }
 
-func (provider *fileSystemProvider) lookEnvelop(dateStr string) *Envelop {
+func (provider *fileSystemProvider) lookEnvelop(dateStr string) *data.Envelop {
 	// correct weekend offset, as we miss data for those
 	time, err := time.Parse("2006-01-02", dateStr)
 	var date string = time.Format("2006-01-02")
@@ -57,7 +57,7 @@ func (provider *fileSystemProvider) lookEnvelop(dateStr string) *Envelop {
 	}
 	defer handle.Close()
 
-	envelop := Envelop{}
+	envelop := data.Envelop{}
 	decoder := xml.NewDecoder(handle)
 	if err := decoder.Decode(&envelop); err != nil {
 		fmt.Printf("unable to decode xml")
@@ -78,7 +78,7 @@ func (provider *fileSystemProvider) LookupCurrencyExchange(w http.ResponseWriter
 	cube := envelop.Cubes[0]
 
 	currency := string(bytes.ToUpper([]byte(vars["currency"])))
-	var exchange Exchange
+	var exchange data.Exchange
 	if currency == "EUR" {
 		exchange.Currency = "EUR"
 		exchange.Rate = 1.0
@@ -90,7 +90,7 @@ func (provider *fileSystemProvider) LookupCurrencyExchange(w http.ResponseWriter
 		}
 	}
 
-	if exchange == (Exchange{}) {
+	if exchange == (data.Exchange{}) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
