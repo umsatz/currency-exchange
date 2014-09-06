@@ -66,9 +66,8 @@ func (provider *fileSystemProvider) lookEnvelop(dateStr string) *data.Envelop {
 	return &envelop
 }
 
-func (provider *fileSystemProvider) LookupCurrencyExchange(w http.ResponseWriter, req *http.Request) {
+func (provider *fileSystemProvider) LookupCurrencyExchange(w http.ResponseWriter, req *http.Request, vars map[string]string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	vars := mux.Vars(req)
 
 	envelop := provider.lookEnvelop(vars["date"])
 	if envelop == nil {
@@ -108,9 +107,8 @@ type exchangeInfoCollection struct {
 	Exchanges []shortExchangeInfo `json:"exchanges"`
 }
 
-func (provider *fileSystemProvider) ListCurrencyExchange(w http.ResponseWriter, req *http.Request) {
+func (provider *fileSystemProvider) ListCurrencyExchange(w http.ResponseWriter, req *http.Request, vars map[string]string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	vars := mux.Vars(req)
 
 	envelop := provider.lookEnvelop(vars["date"])
 	cube := envelop.Cubes[0]
@@ -179,6 +177,13 @@ func ValidateRequestedDate(next http.Handler) http.HandlerFunc {
 	}
 }
 
+type VarsHandler func(http.ResponseWriter, *http.Request, map[string]string)
+
+func (h VarsHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	h(w, req, vars)
+}
+
 func main() {
 	var (
 		httpAddress   = flag.String("http.addr", ":8080", "HTTP listen address")
@@ -195,8 +200,8 @@ func main() {
 	provider := fileSystemProvider{*dataDirectory}
 
 	r := mux.NewRouter()
-	r.Handle("/{date}/{currency}", logHandler(ValidateRequestedDate(http.HandlerFunc(provider.LookupCurrencyExchange)))).Methods("GET")
-	r.Handle("/{date}", logHandler(ValidateRequestedDate(http.HandlerFunc(provider.ListCurrencyExchange)))).Methods("GET")
+	r.Handle("/{date}/{currency}", logHandler(ValidateRequestedDate(VarsHandler(provider.LookupCurrencyExchange)))).Methods("GET")
+	r.Handle("/{date}", logHandler(ValidateRequestedDate(VarsHandler(provider.ListCurrencyExchange)))).Methods("GET")
 
 	log.Printf("listening on %s", *httpAddress)
 	log.Fatal(http.ListenAndServe(*httpAddress, http.Handler(r)))
