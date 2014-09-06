@@ -13,7 +13,7 @@ import (
 	time "time"
 
 	"github.com/gorilla/mux"
-	data "github.com/umsatz/currency-exchange/data"
+	"github.com/umsatz/currency-exchange/data"
 )
 
 type fileSystemProvider struct {

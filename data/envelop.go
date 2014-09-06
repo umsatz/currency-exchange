@@ -33,6 +33,13 @@ type Envelop struct {
 	Cubes   []Cube `xml:"Cube>Cube"`
 }
 
+func (env *Envelop) Exchanges() []Exchange {
+	if len(env.Cubes) != 1 {
+		return nil
+	}
+	return env.Cubes[0].Exchanges
+}
+
 type Cube struct {
 	Date      ShortDate  `xml:"time,attr"`
 	Exchanges []Exchange `xml:"Cube"`
