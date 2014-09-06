@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"flag"
@@ -10,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	time "time"
 
 	"github.com/gorilla/mux"
@@ -76,13 +76,13 @@ func (provider *fileSystemProvider) LookupCurrencyExchange(w http.ResponseWriter
 	}
 	cube := envelop.Cubes[0]
 
-	currency := string(bytes.ToUpper([]byte(vars["currency"])))
+	currency := strings.ToUpper(vars["currency"])
 	var exchange data.Exchange
 	if currency == "EUR" {
 		exchange.Currency = "EUR"
 		exchange.Rate = 1.0
 	} else {
-		for _, ex := range cube.Exchanges {
+		for _, ex := range envelop.Exchanges() {
 			if ex.Currency == currency {
 				exchange = ex
 			}

@@ -2,46 +2,69 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/gorilla/mux"
 )
 
-type currencyListTest struct {
+type lookupCurrencyTest struct {
+	title        string // title of the test
+	date         string // requested date
+	currency     string // requested currency
+	expectedDate string // expected date
+}
+
+func TestLookupCurrencyExchange(t *testing.T) {
+	tests := []lookupCurrencyTest{
+		{
+			title:        "regular match on weekday",
+			date:         "2010-07-14",
+			currency:     "USD",
+			expectedDate: "2010-07-14",
+		},
+	}
+
+	testLookupCurrency := func(test lookupCurrencyTest, t *testing.T) {
+		request, _ := http.NewRequest("GET", fmt.Sprintf("/%s/%s", test.date, test.currency), nil)
+		response := httptest.NewRecorder()
+
+		provider := fileSystemProvider{"../data"}
+		provider.LookupCurrencyExchange(response, request, map[string]string{"date": test.date, "currency": test.currency})
+
+		if response.Code != http.StatusOK {
+			t.Fatalf("Response body did not contain expected %v:\n\tcode: %v", "200", response.Code)
+		}
+
+		decoder := json.NewDecoder(response.Body)
+		var data exchangeInfo
+		if err := decoder.Decode(&data); err != nil {
+			t.Fatalf("Unable to decode json response: %#v", err)
+		}
+
+		if data.Date != test.expectedDate {
+			t.Fatalf("did no respond with correct date: %#v, expected: %#v", data.Date, test.expectedDate)
+		}
+		if data.Currency != test.currency {
+			t.Fatalf("did no respond with correct currency: %#v, expected: %#v", data, test.currency)
+		}
+	}
+
+	for _, test := range tests {
+		testLookupCurrency(test, t)
+	}
+}
+
+type listCurrencyTest struct {
 	title        string // title of the test
 	date         string // requested date
 	expectedDate string // expected date
 }
 
-func testListCurrency(test currencyListTest, t *testing.T) {
-	request, _ := http.NewRequest("GET", "/"+test.date, nil)
-	response := httptest.NewRecorder()
-
-	provider := fileSystemProvider{"../data"}
-	provider.ListCurrencyExchange(response, request, map[string]string{"date": test.date})
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("Response body did not contain expected %v:\n\tbody: %v", "200", response.Code)
-	}
-
-	decoder := json.NewDecoder(response.Body)
-
-	var data exchangeInfoCollection
-	if err := decoder.Decode(&data); err != nil {
-		t.Fatalf("Unable to decode json response: %#v", err)
-	}
-
-	if data.Date != test.expectedDate {
-		t.Fatalf("did no respond with correct date: %#v, expected: %#v", data.Date, test.expectedDate)
-	}
-
-	if len(data.Exchanges) < 1 {
-		t.Fatalf("did not respond with correct data")
-	}
-}
-
 func TestListCurrencyExchange(t *testing.T) {
-	tests := []currencyListTest{
+	tests := []listCurrencyTest{
 		{
 			title:        "regular match on weekday",
 			date:         "2010-07-14",
@@ -57,11 +80,71 @@ func TestListCurrencyExchange(t *testing.T) {
 		},
 	}
 
+	testListCurrency := func(test listCurrencyTest, t *testing.T) {
+		request, _ := http.NewRequest("GET", "/"+test.date, nil)
+		response := httptest.NewRecorder()
+
+		provider := fileSystemProvider{"../data"}
+		provider.ListCurrencyExchange(response, request, map[string]string{"date": test.date})
+
+		if response.Code != http.StatusOK {
+			t.Fatalf("Response body did not contain expected %v:\n\t", "200")
+		}
+
+		decoder := json.NewDecoder(response.Body)
+		var data exchangeInfoCollection
+		if err := decoder.Decode(&data); err != nil {
+			t.Fatalf("Unable to decode json response: %#v", err)
+		}
+
+		if data.Date != test.expectedDate {
+			t.Fatalf("did no respond with correct date: %#v, expected: %#v", data.Date, test.expectedDate)
+		}
+
+		if len(data.Exchanges) < 1 {
+			t.Fatalf("did not respond with correct data")
+		}
+	}
+
 	for _, test := range tests {
 		testListCurrency(test, t)
 	}
 }
 
-// func TestLookupCurrencyExchange(t *testing.T) {
-// 	t.Fatalf("fail")
-//}
+type validateRequestDateTest struct {
+	title                string // title of the test
+	date                 string // requested date
+	expectedResponseCode int
+}
+
+func TestValidateRequestedDate(t *testing.T) {
+	tests := []validateRequestDateTest{
+		{
+			title:                "date prior to 1999",
+			date:                 "1998-12-20",
+			expectedResponseCode: http.StatusBadRequest,
+		}, {
+			title:                "date in the future",
+			date:                 "2100-01-01",
+			expectedResponseCode: http.StatusBadRequest,
+		},
+	}
+
+	testValidateRequestedDate := func(test validateRequestDateTest, t *testing.T) {
+		r, _ := http.NewRequest("GET", "http://localhost:3000/"+test.date, nil)
+		w := httptest.NewRecorder()
+
+		m := mux.NewRouter()
+		provider := fileSystemProvider{"../data"}
+		m.HandleFunc("/{date}", ValidateRequestedDate(VarsHandler(provider.ListCurrencyExchange)))
+		m.ServeHTTP(w, r)
+
+		if w.Code != test.expectedResponseCode {
+			t.Fatalf("unexpeted response code. expected %v got %v", 400, test.expectedResponseCode)
+		}
+	}
+
+	for _, test := range tests {
+		testValidateRequestedDate(test, t)
+	}
+}
