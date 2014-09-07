@@ -9,10 +9,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/umsatz/currency-exchange/data"
 )
 
@@ -66,17 +66,31 @@ func (provider *fileSystemProvider) lookEnvelop(dateStr string) *data.Envelop {
 	return &envelop
 }
 
-func (provider *fileSystemProvider) LookupCurrencyExchange(w http.ResponseWriter, req *http.Request, vars map[string]string) {
+type listCurrenciesRequest struct {
+	provider *fileSystemProvider
+	date     string
+}
+
+func (req listCurrenciesRequest) Date() string {
+	return req.date
+}
+
+type lookupCurrencyRequest struct {
+	listCurrenciesRequest
+	currency string
+}
+
+func (request lookupCurrencyRequest) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	envelop := provider.lookEnvelop(vars["date"])
+	envelop := request.provider.lookEnvelop(request.date)
 	if envelop == nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	cube := envelop.Cubes[0]
 
-	currency := strings.ToUpper(vars["currency"])
+	currency := strings.ToUpper(request.currency)
 	var exchange data.Exchange
 	if currency == "EUR" {
 		exchange.Currency = "EUR"
@@ -107,10 +121,10 @@ type exchangeInfoCollection struct {
 	Exchanges []shortExchangeInfo `json:"exchanges"`
 }
 
-func (provider *fileSystemProvider) ListCurrencyExchange(w http.ResponseWriter, req *http.Request, vars map[string]string) {
+func (request listCurrenciesRequest) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	envelop := provider.lookEnvelop(vars["date"])
+	envelop := request.provider.lookEnvelop(request.date)
 	cube := envelop.Cubes[0]
 
 	exchangeInfos := make([]shortExchangeInfo, len(cube.Exchanges))
@@ -138,10 +152,13 @@ func logHandler(next http.Handler) http.HandlerFunc {
 
 var earliestTimestamp time.Time = time.Date(1999, 1, 4, 0, 0, 0, 0, time.UTC)
 
-func ValidateRequestedDate(next http.Handler) http.HandlerFunc {
+type RequestWithDate interface {
+	Date() string
+}
+
+func ValidateRequestedDate(request RequestWithDate) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		vars := mux.Vars(req)
-		date, err := time.Parse("2006-01-02", vars["date"])
+		date, err := time.Parse("2006-01-02", request.Date())
 
 		if err != nil {
 			bytes, _ := json.Marshal(map[string][]string{
@@ -173,22 +190,31 @@ func ValidateRequestedDate(next http.Handler) http.HandlerFunc {
 			return
 		}
 
-		next.ServeHTTP(w, req)
+		request.(http.Handler).ServeHTTP(w, req)
 	}
 }
 
-type VarsHandler func(http.ResponseWriter, *http.Request, map[string]string)
-
-func (h VarsHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	h(w, req, vars)
-}
+var routingRegexp *regexp.Regexp = regexp.MustCompile(`/(\d{4}-\d{2}-\d{2})/?([A-Za-z]{3})?`)
 
 func NewCurrencyExchangeServer(provider *fileSystemProvider) http.Handler {
-	r := mux.NewRouter()
+	r := http.NewServeMux()
 
-	r.Handle("/{date}/{currency}", logHandler(ValidateRequestedDate(VarsHandler(provider.LookupCurrencyExchange)))).Methods("GET")
-	r.Handle("/{date}", logHandler(ValidateRequestedDate(VarsHandler(provider.ListCurrencyExchange)))).Methods("GET")
+	r.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		if !routingRegexp.MatchString(req.URL.Path) {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		parts := routingRegexp.FindAllStringSubmatch(req.URL.Path, -1)[0]
+		listRequest := listCurrenciesRequest{date: parts[1], provider: provider}
+
+		if parts[2] == "" {
+			logHandler(ValidateRequestedDate(listRequest)).ServeHTTP(w, req)
+		} else {
+			lookupRequest := lookupCurrencyRequest{listCurrenciesRequest: listRequest, currency: parts[2]}
+			logHandler(ValidateRequestedDate(lookupRequest)).ServeHTTP(w, req)
+		}
+	})
 
 	return http.Handler(r)
 }

@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/gorilla/mux"
 )
 
 func TestLookupCurrencyExchangeIntegration(t *testing.T) {
@@ -62,7 +60,7 @@ func TestLookupCurrencyExchange(t *testing.T) {
 		response := httptest.NewRecorder()
 
 		provider := fileSystemProvider{"../data"}
-		provider.LookupCurrencyExchange(response, request, map[string]string{"date": test.date, "currency": test.currency})
+		lookupCurrencyRequest{listCurrenciesRequest: listCurrenciesRequest{date: test.date, provider: &provider}, currency: test.currency}.ServeHTTP(response, request)
 
 		if response.Code != http.StatusOK {
 			t.Fatalf("Response body did not contain expected %v:\n\tcode: %v", "200", response.Code)
@@ -148,7 +146,7 @@ func TestListCurrencyExchange(t *testing.T) {
 		response := httptest.NewRecorder()
 
 		provider := fileSystemProvider{"../data"}
-		provider.ListCurrencyExchange(response, request, map[string]string{"date": test.date})
+		listCurrenciesRequest{date: test.date, provider: &provider}.ServeHTTP(response, request)
 
 		if response.Code != http.StatusOK {
 			t.Fatalf("Response body did not contain expected %v:\n\t", "200")
@@ -228,10 +226,10 @@ func TestValidateRequestedDate(t *testing.T) {
 		r, _ := http.NewRequest("GET", "http://localhost:3000/"+test.date, nil)
 		w := httptest.NewRecorder()
 
-		m := mux.NewRouter()
 		provider := fileSystemProvider{"../data"}
-		m.HandleFunc("/{date}", ValidateRequestedDate(VarsHandler(provider.ListCurrencyExchange)))
-		m.ServeHTTP(w, r)
+		request := listCurrenciesRequest{date: test.date, provider: &provider}
+
+		ValidateRequestedDate(request).ServeHTTP(w, r)
 
 		if w.Code != test.expectedResponseCode {
 			t.Fatalf("unexpeted response code. expected %v got %v", 400, test.expectedResponseCode)
