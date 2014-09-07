@@ -3,14 +3,11 @@ GO ?= go
 .PHONY: default
 
 default:
-	pushd ./api && $(GO) test
-	popd
-
-	pushd ./data && $(GO) test
-	popd
+	cd ./api && $(GO) test
+	cd ./data && $(GO) test
 
 download:
 	curl http://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml -o data/euro-hist.xml
 
-	pushd ./importer && $(GO) build; popd
+	cd ./importer && $(GO) build
 	./importer/importer -history=./data/euro-hist.xml -out=./data
