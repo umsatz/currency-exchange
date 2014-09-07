@@ -10,6 +10,34 @@ import (
 	"github.com/gorilla/mux"
 )
 
+func TestLookupCurrencyExchangeIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	t.Parallel()
+
+	provider := fileSystemProvider{"../data"}
+
+	ts := httptest.NewServer(NewCurrencyExchangeServer(&provider))
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/2010-07-14/USD")
+	if err != nil {
+		t.Fatalf("err: %#v", err)
+	}
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("Response body did not contain expected %v:\n\tcode: %v", "200", res.StatusCode)
+	}
+
+	decoder := json.NewDecoder(res.Body)
+	var data exchangeInfo
+	if err := decoder.Decode(&data); err != nil {
+		t.Fatalf("Unable to decode json response: %#v", err)
+	}
+}
+
 type lookupCurrencyTest struct {
 	title        string // title of the test
 	date         string // requested date
@@ -18,6 +46,8 @@ type lookupCurrencyTest struct {
 }
 
 func TestLookupCurrencyExchange(t *testing.T) {
+	t.Parallel()
+
 	tests := []lookupCurrencyTest{
 		{
 			title:        "regular match on weekday",
@@ -57,6 +87,34 @@ func TestLookupCurrencyExchange(t *testing.T) {
 	}
 }
 
+func TestListCurrencyExchangeIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	t.Parallel()
+
+	provider := fileSystemProvider{"../data"}
+
+	ts := httptest.NewServer(NewCurrencyExchangeServer(&provider))
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/2010-07-14")
+	if err != nil {
+		t.Fatalf("err: %#v", err)
+	}
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("Response body did not contain expected %v:\n\tcode: %v", "200", res.StatusCode)
+	}
+
+	decoder := json.NewDecoder(res.Body)
+	var data exchangeInfoCollection
+	if err := decoder.Decode(&data); err != nil {
+		t.Fatalf("Unable to decode json response: %#v", err)
+	}
+}
+
 type listCurrencyTest struct {
 	title        string // title of the test
 	date         string // requested date
@@ -64,6 +122,8 @@ type listCurrencyTest struct {
 }
 
 func TestListCurrencyExchange(t *testing.T) {
+	t.Parallel()
+
 	tests := []listCurrencyTest{
 		{
 			title:        "regular match on weekday",
@@ -111,6 +171,31 @@ func TestListCurrencyExchange(t *testing.T) {
 	}
 }
 
+func TestValidateRequestedDateIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	t.Parallel()
+
+	provider := fileSystemProvider{"../data"}
+
+	ts := httptest.NewServer(NewCurrencyExchangeServer(&provider))
+	defer ts.Close()
+
+	if res, _ := http.Get(ts.URL + "/1998-12-20"); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("Response body did not contain expected %v:\n\tcode: %v", "200", res.StatusCode)
+	}
+
+	if res, _ := http.Get(ts.URL + "/2100-01-01"); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("Response body did not contain expected %v:\n\tcode: %v", "200", res.StatusCode)
+	}
+
+	if res, _ := http.Get(ts.URL + "/2100-o1-01"); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("Response body did not contain expected %v:\n\tcode: %v", "200", res.StatusCode)
+	}
+}
+
 type validateRequestDateTest struct {
 	title                string // title of the test
 	date                 string // requested date
@@ -118,6 +203,8 @@ type validateRequestDateTest struct {
 }
 
 func TestValidateRequestedDate(t *testing.T) {
+	t.Parallel()
+
 	tests := []validateRequestDateTest{
 		{
 			title:                "date prior to 1999",
@@ -126,6 +213,10 @@ func TestValidateRequestedDate(t *testing.T) {
 		}, {
 			title:                "date in the future",
 			date:                 "2100-01-01",
+			expectedResponseCode: http.StatusBadRequest,
+		}, {
+			title:                "date is malformatted",
+			date:                 "2100-o1-01",
 			expectedResponseCode: http.StatusBadRequest,
 		},
 	}

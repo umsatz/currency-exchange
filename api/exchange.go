@@ -184,6 +184,15 @@ func (h VarsHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	h(w, req, vars)
 }
 
+func NewCurrencyExchangeServer(provider *fileSystemProvider) http.Handler {
+	r := mux.NewRouter()
+
+	r.Handle("/{date}/{currency}", logHandler(ValidateRequestedDate(VarsHandler(provider.LookupCurrencyExchange)))).Methods("GET")
+	r.Handle("/{date}", logHandler(ValidateRequestedDate(VarsHandler(provider.ListCurrencyExchange)))).Methods("GET")
+
+	return http.Handler(r)
+}
+
 func main() {
 	var (
 		httpAddress   = flag.String("http.addr", ":8080", "HTTP listen address")
@@ -199,10 +208,6 @@ func main() {
 
 	provider := fileSystemProvider{*dataDirectory}
 
-	r := mux.NewRouter()
-	r.Handle("/{date}/{currency}", logHandler(ValidateRequestedDate(VarsHandler(provider.LookupCurrencyExchange)))).Methods("GET")
-	r.Handle("/{date}", logHandler(ValidateRequestedDate(VarsHandler(provider.ListCurrencyExchange)))).Methods("GET")
-
 	log.Printf("listening on %s", *httpAddress)
-	log.Fatal(http.ListenAndServe(*httpAddress, http.Handler(r)))
+	log.Fatal(http.ListenAndServe(*httpAddress, NewCurrencyExchangeServer(&provider)))
 }
