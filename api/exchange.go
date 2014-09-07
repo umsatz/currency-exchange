@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	time "time"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/umsatz/currency-exchange/data"

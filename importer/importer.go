@@ -9,14 +9,14 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/umsatz/currency-exchange/data"
+	"github.com/umsatz/currency-exchange/data"
 )
 
 var historyFile string
 var outputDirectory string
 var importCount int = 0
 
-func WriteXML(env *Envelop) error {
+func WriteXML(env *data.Envelop) error {
 	dataFileName := fmt.Sprintf("%v/%v.xml", outputDirectory, time.Time(env.Cubes[0].Date).Format("2006-01-02"))
 
 	if _, err := os.Stat(dataFileName); err != nil {
@@ -59,13 +59,13 @@ func main() {
 	}
 	defer handle.Close()
 
-	envelop := Envelop{}
+	envelop := data.Envelop{}
 	decoder := xml.NewDecoder(handle)
 	if err := decoder.Decode(&envelop); err != nil {
 		log.Fatalf(`unable to decode history file: %#v`, err)
 	}
 
-	envelops := make(chan *Envelop, 10)
+	envelops := make(chan *data.Envelop, 10)
 	var wait sync.WaitGroup
 	for i := 0; i < 4; i++ {
 		wait.Add(1)
@@ -78,7 +78,7 @@ func main() {
 	}
 
 	for _, cube := range envelop.Cubes {
-		envelops <- &Envelop{envelop.Subject, envelop.Sender, []Cube{cube}}
+		envelops <- &data.Envelop{envelop.Subject, envelop.Sender, []data.Cube{cube}}
 	}
 	close(envelops)
 
