@@ -22,19 +22,14 @@ func TestLookupCurrencyExchangeIntegration(t *testing.T) {
 	ts := httptest.NewServer(NewCurrencyExchangeServer(&provider))
 	defer ts.Close()
 
-	res, err := http.Get(ts.URL + "/2010-07-14/USD")
-	if err != nil {
-		t.Fatalf("err: %#v", err)
-	}
-
-	if res.StatusCode != http.StatusOK {
+	if res, _ := http.Get(ts.URL + "/2010-07-14/USD"); res.StatusCode != http.StatusOK {
 		t.Fatalf("Response body did not contain expected %v:\n\tcode: %v", "200", res.StatusCode)
-	}
-
-	decoder := json.NewDecoder(res.Body)
-	var data exchangeInfo
-	if err := decoder.Decode(&data); err != nil {
-		t.Fatalf("Unable to decode json response: %#v", err)
+	} else {
+		decoder := json.NewDecoder(res.Body)
+		var data exchangeInfo
+		if err := decoder.Decode(&data); err != nil {
+			t.Fatalf("Unable to decode json response: %#v", err)
+		}
 	}
 }
 
@@ -99,19 +94,14 @@ func TestListCurrencyExchangeIntegration(t *testing.T) {
 	ts := httptest.NewServer(NewCurrencyExchangeServer(&provider))
 	defer ts.Close()
 
-	res, err := http.Get(ts.URL + "/2010-07-14")
-	if err != nil {
-		t.Fatalf("err: %#v", err)
-	}
-
-	if res.StatusCode != http.StatusOK {
+	if res, _ := http.Get(ts.URL + "/2010-07-14"); res.StatusCode != http.StatusOK {
 		t.Fatalf("Response body did not contain expected %v:\n\tcode: %v", "200", res.StatusCode)
-	}
-
-	decoder := json.NewDecoder(res.Body)
-	var data exchangeInfoCollection
-	if err := decoder.Decode(&data); err != nil {
-		t.Fatalf("Unable to decode json response: %#v", err)
+	} else {
+		decoder := json.NewDecoder(res.Body)
+		var data exchangeInfoCollection
+		if err := decoder.Decode(&data); err != nil {
+			t.Fatalf("Unable to decode json response: %#v", err)
+		}
 	}
 }
 
