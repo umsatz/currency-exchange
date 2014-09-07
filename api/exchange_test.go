@@ -49,6 +49,11 @@ func TestLookupCurrencyExchange(t *testing.T) {
 			date:         "2010-07-14",
 			currency:     "USD",
 			expectedDate: "2010-07-14",
+		}, {
+			title:        "regular match on weekday",
+			date:         "2010-07-14",
+			currency:     "EUR",
+			expectedDate: "2010-07-14",
 		},
 	}
 
@@ -124,9 +129,17 @@ func TestListCurrencyExchange(t *testing.T) {
 			date:         "2010-07-11",
 			expectedDate: "2010-07-09",
 		}, {
+			title:        "saturday returns friday",
+			date:         "2010-07-10",
+			expectedDate: "2010-07-09",
+		}, {
 			title:        "holidays return pre-holiday",
 			date:         "2013-11-31",
 			expectedDate: "2013-11-29",
+		}, {
+			title:        "skips missing days",
+			date:         "2001-04-16",
+			expectedDate: "2001-04-12",
 		},
 	}
 
