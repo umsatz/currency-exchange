@@ -6,7 +6,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/golang/groupcache"
 )
+
+var testProvider = fileSystemProvider{"../data", nil}
+
+func newFakeProvider() fileSystemProvider {
+	if testProvider.cache == nil {
+		testProvider.cache = groupcache.NewGroup("testExchangeRates", 64<<20, groupcache.GetterFunc(testProvider.getExchangeRateData))
+	}
+	return testProvider
+}
 
 func TestLookupCurrencyExchangeIntegration(t *testing.T) {
 	if testing.Short() {
@@ -15,7 +26,7 @@ func TestLookupCurrencyExchangeIntegration(t *testing.T) {
 
 	t.Parallel()
 
-	provider := fileSystemProvider{"../data"}
+	provider := newFakeProvider()
 
 	ts := httptest.NewServer(NewCurrencyExchangeServer(&provider))
 	defer ts.Close()
@@ -59,7 +70,7 @@ func TestLookupCurrencyExchange(t *testing.T) {
 		request, _ := http.NewRequest("GET", fmt.Sprintf("/%s/%s", test.date, test.currency), nil)
 		response := httptest.NewRecorder()
 
-		provider := fileSystemProvider{"../data"}
+		provider := newFakeProvider()
 		lookupCurrencyRequest{listCurrenciesRequest: listCurrenciesRequest{date: test.date, provider: &provider}, currency: test.currency}.ServeHTTP(response, request)
 
 		if response.Code != http.StatusOK {
@@ -92,7 +103,7 @@ func TestListCurrencyExchangeIntegration(t *testing.T) {
 
 	t.Parallel()
 
-	provider := fileSystemProvider{"../data"}
+	provider := newFakeProvider()
 
 	ts := httptest.NewServer(NewCurrencyExchangeServer(&provider))
 	defer ts.Close()
@@ -145,7 +156,7 @@ func TestListCurrencyExchange(t *testing.T) {
 		request, _ := http.NewRequest("GET", "/"+test.date, nil)
 		response := httptest.NewRecorder()
 
-		provider := fileSystemProvider{"../data"}
+		provider := newFakeProvider()
 		listCurrenciesRequest{date: test.date, provider: &provider}.ServeHTTP(response, request)
 
 		if response.Code != http.StatusOK {
@@ -179,7 +190,7 @@ func TestValidateRequestedDateIntegration(t *testing.T) {
 
 	t.Parallel()
 
-	provider := fileSystemProvider{"../data"}
+	provider := newFakeProvider()
 
 	ts := httptest.NewServer(NewCurrencyExchangeServer(&provider))
 	defer ts.Close()
@@ -226,7 +237,7 @@ func TestValidateRequestedDate(t *testing.T) {
 		r, _ := http.NewRequest("GET", "http://localhost:3000/"+test.date, nil)
 		w := httptest.NewRecorder()
 
-		provider := fileSystemProvider{"../data"}
+		provider := newFakeProvider()
 		request := listCurrenciesRequest{date: test.date, provider: &provider}
 
 		ValidateRequestedDate(request).ServeHTTP(w, r)

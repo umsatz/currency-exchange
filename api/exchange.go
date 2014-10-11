@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -13,11 +15,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/groupcache"
 	"github.com/umsatz/currency-exchange/data"
 )
 
 type fileSystemProvider struct {
 	dataDirectory string
+	cache         *groupcache.Group
 }
 
 type shortExchangeInfo struct {
@@ -30,7 +34,7 @@ type exchangeInfo struct {
 	shortExchangeInfo
 }
 
-func (provider *fileSystemProvider) lookEnvelop(dateStr string) *data.Envelop {
+func (provider *fileSystemProvider) getExchangeRateData(ctx groupcache.Context, dateStr string, dest groupcache.Sink) error {
 	// correct weekend offset, as we miss data for those
 	time, err := time.Parse("2006-01-02", dateStr)
 	var date string = time.Format("2006-01-02")
@@ -55,15 +59,12 @@ func (provider *fileSystemProvider) lookEnvelop(dateStr string) *data.Envelop {
 			return nil
 		}
 	}
-	defer handle.Close()
 
-	envelop := data.Envelop{}
-	decoder := xml.NewDecoder(handle)
-	if err := decoder.Decode(&envelop); err != nil {
-		fmt.Printf("unable to decode xml")
-		return nil
-	}
-	return &envelop
+	b, e := ioutil.ReadAll(handle)
+	handle.Close()
+
+	dest.SetBytes(b)
+	return e
 }
 
 type listCurrenciesRequest struct {
@@ -83,7 +84,17 @@ type lookupCurrencyRequest struct {
 func (request lookupCurrencyRequest) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	envelop := request.provider.lookEnvelop(request.date)
+	var cachedData []byte
+	request.provider.cache.Get(req, request.date, groupcache.AllocatingByteSliceSink(&cachedData))
+
+	envelop := &data.Envelop{}
+	decoder := xml.NewDecoder(bytes.NewReader(cachedData))
+	if err := decoder.Decode(&envelop); err != nil {
+		fmt.Printf("unable to decode xml")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	if envelop == nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -124,7 +135,17 @@ type exchangeInfoCollection struct {
 func (request listCurrenciesRequest) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	envelop := request.provider.lookEnvelop(request.date)
+	var cachedData []byte
+	request.provider.cache.Get(req, request.date, groupcache.AllocatingByteSliceSink(&cachedData))
+
+	envelop := data.Envelop{}
+	decoder := xml.NewDecoder(bytes.NewReader(cachedData))
+	if err := decoder.Decode(&envelop); err != nil {
+		fmt.Printf("unable to decode xml")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	cube := envelop.Cubes[0]
 
 	exchangeInfos := make([]shortExchangeInfo, len(cube.Exchanges))
@@ -205,6 +226,7 @@ func NewCurrencyExchangeServer(provider *fileSystemProvider) http.Handler {
 			return
 		}
 
+		// parts consists of three things: [0] => path, [1] => date, [2] => currency
 		parts := routingRegexp.FindAllStringSubmatch(req.URL.Path, -1)[0]
 		listRequest := listCurrenciesRequest{date: parts[1], provider: provider}
 
@@ -232,7 +254,9 @@ func main() {
 		log.Fatalf(`%v is no directory`, *dataDirectory)
 	}
 
-	provider := fileSystemProvider{*dataDirectory}
+	groupcache.NewHTTPPool("http://127.0.0.1")
+	provider := fileSystemProvider{*dataDirectory, nil}
+	provider.cache = groupcache.NewGroup("exchangeRates", 64<<20, groupcache.GetterFunc(provider.getExchangeRateData))
 
 	log.Printf("listening on %s", *httpAddress)
 	log.Fatal(http.ListenAndServe(*httpAddress, NewCurrencyExchangeServer(&provider)))
