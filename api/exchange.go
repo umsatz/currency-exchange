@@ -21,7 +21,6 @@ import (
 
 type fileSystemProvider struct {
 	dataDirectory string
-	cache         *groupcache.Group
 }
 
 type shortExchangeInfo struct {
@@ -34,7 +33,7 @@ type exchangeInfo struct {
 	shortExchangeInfo
 }
 
-func (provider *fileSystemProvider) getExchangeRateData(ctx groupcache.Context, dateStr string, dest groupcache.Sink) error {
+func (provider *fileSystemProvider) getExchangeRateData(dateStr string) error {
 	// correct weekend offset, as we miss data for those
 	time, err := time.Parse("2006-01-02", dateStr)
 	var date string = time.Format("2006-01-02")
@@ -254,9 +253,7 @@ func main() {
 		log.Fatalf(`%v is no directory`, *dataDirectory)
 	}
 
-	groupcache.NewHTTPPool("http://127.0.0.1")
 	provider := fileSystemProvider{*dataDirectory, nil}
-	provider.cache = groupcache.NewGroup("exchangeRates", 64<<20, groupcache.GetterFunc(provider.getExchangeRateData))
 
 	log.Printf("listening on %s", *httpAddress)
 	log.Fatal(http.ListenAndServe(*httpAddress, NewCurrencyExchangeServer(&provider)))

@@ -1,13 +1,40 @@
-GO ?= go
+GO         ?= go
+COMMIT     := $(shell git rev-parse --short HEAD)
+VERSION    := 1.0.0
 
-.PHONY: default
+LDFLAGS    := -ldflags \
+              "-X main.Commit $(COMMIT)\
+               -X main.Version $(VERSION)"
 
-default:
-	cd ./api && $(GO) test
-	cd ./data && $(GO) test
+GOOS       := $(shell go env GOOS)
+GOARCH     := $(shell go env GOARCH)
+GOBUILD    := GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o dist/api $(LDFLAGS)
+GOFILES    := $(shell find . -name "*.go" -exec echo {}  \; | sed -e s/.\\/// | grep -ve test)
+
+ARCHIVE    := currency-api-$(VERSION)-$(GOOS)-$(GOARCH).tar.gz
+DISTDIR    := dist/$(GOOS)_$(GOARCH)
+
+.PHONY: default archive clean install download
+
 
 download:
-	curl http://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml -o data/euro-hist.xml
+	curl http://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml -o data/eurofxref-hist.xml
 
-	cd ./importer && $(GO) build
-	./importer/importer -history=./data/euro-hist.xml -out=./data
+default: *.go
+	$(GOBUILD)
+
+archive: dist/$(ARCHIVE)
+
+all: build
+
+build:
+	$(GO) build
+
+clean:
+	git clean -f -x -d
+
+dist/$(ARCHIVE): $(DISTDIR)/api
+	tar -C $(DISTDIR) -czvf $@ .
+
+$(DISTDIR)/api: *.go
+	$(GOBUILD) -o $@
