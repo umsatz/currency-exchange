@@ -12,16 +12,7 @@ Actual JSON api for currency exchange rates.
 To run:
 
 ```
-$ exchange -data=/path/euroxml-hist -http.addr=:8080
-```
-
-```
-  curl http://localhost:8080/rates/2013-02-20/USD
-  {
-    "date": "2013-02-20",
-    "currency": "USD",
-    "rate": 1.337
-  }
+$ exchange -historic.data=/path/euroxml-hist.xml -http.addr=:8080
 ```
 
 ```
