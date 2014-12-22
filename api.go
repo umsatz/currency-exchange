@@ -224,15 +224,27 @@ func updateExchangeRatesPeriodically() {
 	}
 }
 
+// Set by make file on build
+var (
+	Version string
+	Commit  string
+)
+
 func main() {
 	var (
 		httpAddress  = flag.String("http.addr", ":8080", "HTTP listen address")
 		historicData = flag.String("historic.data", "", "path to data directory")
+		printVersion = flag.Bool("version", false, "print version and exit")
 	)
 	flag.Parse()
 
+	if *printVersion {
+		fmt.Printf("%s", Version)
+		os.Exit(0)
+	}
+
 	if err := populateExchangeRateCache(*historicData); err != nil {
-		fmt.Errorf("Unable to populate cache: %v", err)
+		fmt.Printf("Unable to populate cache: %v", err)
 		os.Exit(-1)
 	}
 	go updateExchangeRatesPeriodically()
