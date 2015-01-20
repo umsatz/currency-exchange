@@ -1,5 +1,7 @@
 # currency-exchange
 
+[![Build Status](https://travis-ci.org/umsatz/currency-exchange.svg)](https://travis-ci.org/umsatz/currency-exchange)
+
 api for past and present currency exchange rates
 
 The API requires you to import euro exchange informations as available from the ECB.
@@ -18,18 +20,11 @@ $ exchange -historic.data=/path/euroxml-hist.xml -http.addr=:8080
 ```
   curl http://localhost:8080/rates/2013-02-20
   {
-    "date": "2013-02-20",
-    "exchanges": [
-        {
-            "currency": "USD",
-            "rate": 1.337
-        },
-        ...
-        {
-            "currency": "ZAR",
-            "rate": 11.8659
-        }
-    ]
+    "date": "2010-07-14",
+    "rates": {
+        "GBP": 0.8343,
+        "USD": 1.2703
+    }
   }
 ```
 
