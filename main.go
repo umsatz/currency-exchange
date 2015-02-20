@@ -158,6 +158,8 @@ func logHandler(next http.Handler) http.HandlerFunc {
 	}
 }
 
+var cacheControl = (30 * 24 * time.Hour) / time.Second
+
 func newCurrencyExchangeServer() http.Handler {
 	r := http.NewServeMux()
 
@@ -168,6 +170,7 @@ func newCurrencyExchangeServer() http.Handler {
 		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", cacheControl))
 
 		parts := routingRegexp.FindAllStringSubmatch(req.URL.Path, -1)[0]
 		requestedDate := parts[1]
