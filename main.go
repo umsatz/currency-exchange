@@ -137,8 +137,12 @@ func exchangeRatesByCurrency(rates []exchange) map[string]float32 {
 	return mappedByCurrency
 }
 
-// accept strings like /1986-09-03 and /1986-09-03/USD
-var routingRegexp = regexp.MustCompile(`/(\d{4}-\d{2}-\d{2})/?`)
+var (
+	// accept strings like /1986-09-03 and /1986-09-03/USD
+	routingRegexp      = regexp.MustCompile(`/(\d{4}-\d{2}-\d{2})/?$`)
+	errRouting         = fmt.Errorf("Routing mismatch. Expected %v", routingRegexp)
+	errNoDataAvailable = fmt.Errorf("No data available for requested date")
+)
 
 type exchangeResponse struct {
 	Date  string             `json:"date"`
@@ -160,61 +164,76 @@ func logHandler(next http.Handler) http.HandlerFunc {
 
 var cacheControl = (30 * 24 * time.Hour) / time.Second
 
+type httpFunc func(w http.ResponseWriter, req *http.Request) (int, error)
+
+func (f httpFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if status, err := f(w, r); err != nil {
+		switch status {
+		case http.StatusBadRequest:
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		case http.StatusNotFound:
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		default:
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+	}
+}
+
+func serveExchangeRates(w http.ResponseWriter, req *http.Request) (int, error) {
+	if !routingRegexp.MatchString(req.URL.Path) {
+		return http.StatusBadRequest, errRouting
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", cacheControl))
+
+	parts := routingRegexp.FindAllStringSubmatch(req.URL.Path, -1)[0]
+	requestedDate := parts[1]
+
+	// force clients to pass valid dates in correct format
+	date, err := time.Parse("2006-01-02", requestedDate)
+	if err != nil {
+		return http.StatusBadRequest, err
+	}
+
+	servedDate := requestedDate
+	for {
+		// ensure the request is in a valid timespan
+		if date.Year() < 1999 {
+			return http.StatusBadRequest, fmt.Errorf("%q < 1999-01-01. No data available", date.Format("2006-01-02"))
+		}
+
+		// look at previous day to skip weekend and holiday gaps
+		if _, ok := exchangeRates[servedDate]; !ok {
+			date = date.Add(-24 * time.Hour)
+			servedDate = date.Format("2006-01-02")
+		} else {
+			break
+		}
+	}
+
+	if _, ok := exchangeRates[servedDate]; !ok {
+		return http.StatusNotFound, errNoDataAvailable
+	}
+
+	var exs = exchangeRates[servedDate]
+	var resp = exchangeResponse{
+		Date:  servedDate,
+		Rates: exchangeRatesByCurrency(exs),
+	}
+
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(resp); err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	return http.StatusOK, nil
+}
+
 func newCurrencyExchangeServer() http.Handler {
 	r := http.NewServeMux()
 
-	r.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		if !routingRegexp.MatchString(req.URL.Path) {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", cacheControl))
-
-		parts := routingRegexp.FindAllStringSubmatch(req.URL.Path, -1)[0]
-		requestedDate := parts[1]
-
-		// force clients to pass valid dates in correct format
-		date, err := time.Parse("2006-01-02", requestedDate)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		servedDate := requestedDate
-		for {
-			// ensure the request is in a valid timespan
-			if date.Year() < 1999 {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
-			// look at previous day to skip weekend and holiday gaps
-			if _, ok := exchangeRates[servedDate]; !ok {
-				date = date.Add(-24 * time.Hour)
-				servedDate = date.Format("2006-01-02")
-			} else {
-				break
-			}
-		}
-
-		if _, ok := exchangeRates[servedDate]; !ok {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		var exs = exchangeRates[servedDate]
-		var resp = exchangeResponse{
-			Date:  servedDate,
-			Rates: exchangeRatesByCurrency(exs),
-		}
-
-		enc := json.NewEncoder(w)
-		if err := enc.Encode(resp); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	})
+	r.Handle("/", httpFunc(serveExchangeRates))
 
 	return http.Handler(r)
 }
