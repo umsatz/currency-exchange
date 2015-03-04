@@ -11,6 +11,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"sync"
 	"time"
 )
 
@@ -67,6 +68,7 @@ var desiredCurrencies = map[string]struct{}{
 
 // last 90 days are available at http://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml
 var eurHistURL = "http://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml"
+var mu *sync.RWMutex
 var exchangeRates = map[string][]exchange{}
 
 func downloadExchangeRates() (io.Reader, error) {
@@ -93,6 +95,9 @@ func filterExchangeRates(c cube) []exchange {
 }
 
 func updateExchangeRates(data io.Reader) error {
+	mu.Lock()
+	defer mu.Unlock()
+
 	var e envelop
 	decoder := xml.NewDecoder(data)
 	if err := decoder.Decode(&e); err != nil {
@@ -196,6 +201,9 @@ func serveExchangeRates(w http.ResponseWriter, req *http.Request) (int, error) {
 		return http.StatusBadRequest, err
 	}
 
+	mu.RLock()
+	defer mu.RUnlock()
+
 	servedDate := requestedDate
 	for {
 		// ensure the request is in a valid timespan
@@ -251,6 +259,10 @@ var (
 	Version string
 	Commit  string
 )
+
+func init() {
+	mu = &sync.RWMutex{}
+}
 
 func main() {
 	var (
