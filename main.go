@@ -159,7 +159,9 @@ func logHandler(next http.Handler) http.HandlerFunc {
 		start := time.Now()
 		next.ServeHTTP(w, r)
 		log.Printf(
-			"%s\t%s\t%s",
+			"%s\t%s\t%s\t%s\t%s",
+			r.RemoteAddr,
+			time.Now().Format("2006-01-02T15:04:05 -0700"),
 			r.Method,
 			r.RequestURI,
 			time.Since(start),
@@ -265,6 +267,7 @@ func init() {
 }
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 	var (
 		httpAddress  = flag.String("http.addr", ":8080", "HTTP listen address")
 		historicData = flag.String("historic.data", "", "path to data directory")
