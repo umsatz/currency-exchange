@@ -1,4 +1,4 @@
-GO         ?= golang:1.8beta2-onbuild
+GO         ?= golang:1.7.4-onbuild
 COMMIT     := $(shell git rev-parse --short HEAD)
 VERSION    := $(shell git describe --abbrev=0 --tags)
 
@@ -10,7 +10,7 @@ LDFLAGS    := -ldflags \
 
 .PHONY: default download
 
-download:
+data/eurofxref-hist.xml:
 	curl http://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml -o data/eurofxref-hist.xml
 
 default: *.go
@@ -20,7 +20,7 @@ archive: dist/$(ARCHIVE)
 
 all: compile build
 
-compile:
+compile: data/eurofxref-hist.xml
 	docker run --rm -v "$(PWD)":/usr/src/currency-exchange -w /usr/src/currency-exchange -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=amd64 $(GO) go build -a --installsuffix cgo $(LDFLAGS) -v
 
 clean:
@@ -28,3 +28,6 @@ clean:
 
 build: compile
 	docker build -t currency-exchange:$(VERSION) .
+
+test: data/eurofxref-hist.xml
+	docker run --rm -v "$(PWD)":/usr/src/currency-exchange -w /usr/src/currency-exchange $(GO) go test -v .

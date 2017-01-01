@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,7 +17,9 @@ type testServer struct {
 var TestServer testServer
 
 func TestMain(m *testing.M) {
-	populateExchangeRateCache("data/eurofxref-hist.xml")
+	if err := populateExchangeRateCache("data/eurofxref-hist.xml"); err != nil {
+		log.Fatalf("Unable to populate cache: %v\n", err)
+	}
 	TestServer = testServer{
 		server: httptest.NewServer(newCurrencyExchangeServer()),
 	}
@@ -78,21 +82,22 @@ func TestHTTPApi(t *testing.T) {
 			resp, _ := http.Get(TestServer.server.URL + "/" + test.date)
 
 			if resp.StatusCode != http.StatusOK {
-				t.Fatalf("resp body did not contain expected %s: %d\n\t", "200", resp.StatusCode)
+				str, _ := ioutil.ReadAll(resp.Body)
+				t.Fatalf("resp body did not contain expected %s: %d\n%s\n\t", "200", resp.StatusCode, string(str))
 			}
 
 			decoder := json.NewDecoder(resp.Body)
 			var data exchangeResponse
 			if err := decoder.Decode(&data); err != nil {
-				t.Fatalf("Unable to decode json response: %#v", err)
+				t.Fatalf("Unable to decode json response: %#v\n", err)
 			}
 
 			if data.Date != test.expectedDate {
-				t.Fatalf("did no respond with correct date: %#v, expected: %#v", data.Date, test.expectedDate)
+				t.Fatalf("did no respond with correct date: %#v, expected: %#v\n", data.Date, test.expectedDate)
 			}
 
 			if len(data.Rates) < 1 {
-				t.Fatalf("did not respond with correct data")
+				t.Fatalf("did not respond with correct data\n")
 			}
 
 			for k, v := range test.expectedRates {

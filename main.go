@@ -210,7 +210,7 @@ func serveExchangeRates(w http.ResponseWriter, req *http.Request) (int, error) {
 	for {
 		// ensure the request is in a valid timespan
 		if date.Year() < 1999 {
-			return http.StatusBadRequest, fmt.Errorf("%q < 1999-01-01. No data available", date.Format("2006-01-02"))
+			return http.StatusBadRequest, fmt.Errorf("%q < 1999-01-01. No data available.", date.Format("2006-01-02"))
 		}
 
 		// look at previous day to skip weekend and holiday gaps

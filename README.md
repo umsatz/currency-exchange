@@ -1,6 +1,6 @@
 # currency-exchange
 
-[![Build Status](https://travis-ci.org/umsatz/currency-exchange.svg)](https://travis-ci.org/umsatz/currency-exchange)
+[![Build Status](https://circleci.com/gh/umsatz/currency-exchange/tree/master.svg?style=svg)](https://circleci.com/gh/umsatz/currency-exchange)
 
 api for past and present currency exchange rates
 

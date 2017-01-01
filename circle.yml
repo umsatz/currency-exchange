@@ -1,0 +1,13 @@
+machine:
+  services:
+    - docker
+
+dependencies:
+  cache_directories:
+    - data
+  override:
+    - echo "Ignore CircleCI defaults"
+
+test:
+  override:
+    - make test
