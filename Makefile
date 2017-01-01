@@ -1,6 +1,6 @@
 GO         ?= golang:1.8beta2-onbuild
 COMMIT     := $(shell git rev-parse --short HEAD)
-VERSION    := 1.1.1
+VERSION    := $(shell git describe --abbrev=0 --tags)
 
 LDFLAGS    := -ldflags \
               "-s \
