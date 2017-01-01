@@ -24,3 +24,4 @@ _testmain.go
 
 data/*.xml
 dist/*
+currency-exchange

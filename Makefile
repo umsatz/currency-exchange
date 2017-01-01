@@ -1,21 +1,14 @@
-GO         ?= go
+GO         ?= golang:1.8beta2-onbuild
 COMMIT     := $(shell git rev-parse --short HEAD)
 VERSION    := 1.1.1
 
 LDFLAGS    := -ldflags \
-              "-X main.Commit $(COMMIT)\
-               -X main.Version $(VERSION)"
+              "-s \
+               -X main.Commit=$(COMMIT)\
+               -X main.Version=$(VERSION)"
 
-GOOS       := $(shell go env GOOS)
-GOARCH     := $(shell go env GOARCH)
-GOBUILD    := GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o dist/api $(LDFLAGS)
-GOFILES    := $(shell find . -name "*.go" -exec echo {}  \; | sed -e s/.\\/// | grep -ve test)
 
-ARCHIVE    := currency-api-$(VERSION)-$(GOOS)-$(GOARCH).tar.gz
-DISTDIR    := dist/$(GOOS)_$(GOARCH)
-
-.PHONY: default archive clean install download
-
+.PHONY: default download
 
 download:
 	curl http://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml -o data/eurofxref-hist.xml
@@ -25,16 +18,13 @@ default: *.go
 
 archive: dist/$(ARCHIVE)
 
-all: build
+all: compile build
 
-build:
-	$(GO) build
+compile:
+	docker run --rm -v "$(PWD)":/usr/src/currency-exchange -w /usr/src/currency-exchange -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=amd64 $(GO) go build -a --installsuffix cgo $(LDFLAGS) -v
 
 clean:
-	git clean -f -x -d
+	rm currency-exchange
 
-dist/$(ARCHIVE): $(DISTDIR)/api
-	tar -C $(DISTDIR) -czvf $@ .
-
-$(DISTDIR)/api: *.go
-	$(GOBUILD) -o $@
+build: compile
+	docker build -t currency-exchange:$(VERSION) .
