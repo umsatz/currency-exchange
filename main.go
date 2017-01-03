@@ -2,33 +2,18 @@ package main
 
 import (
 	"encoding/json"
-	"encoding/xml"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
-	"regexp"
-	"runtime"
+	"strings"
 	"sync"
 	"time"
-)
 
-// these structs reflect the eurofxref xml data structure
-type envelop struct {
-	Subject string `xml:"subject"`
-	Sender  string `xml:"Sender>name"`
-	Cubes   []cube `xml:"Cube>Cube"`
-}
-type cube struct {
-	Date      string     `xml:"time,attr"`
-	Exchanges []exchange `xml:"Cube"`
-}
-type exchange struct {
-	Currency string  `xml:"currency,attr" json:"currency"`
-	Rate     float32 `xml:"rate,attr" json:"rate"`
-}
+	"github.com/umsatz/currency-exchange/ecb"
+)
 
 // EUR is not present because all exchange rates are a reference to the EUR
 var desiredCurrencies = map[string]struct{}{
@@ -69,25 +54,12 @@ var desiredCurrencies = map[string]struct{}{
 // last 90 days are available at http://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml
 var eurHistURL = "http://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml"
 var mu *sync.RWMutex
-var exchangeRates = map[string][]exchange{}
+var exchangeRates = map[string][]ecb.Exchange{}
 
-func downloadExchangeRates() (io.Reader, error) {
-	resp, err := http.Get(eurHistURL)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP request returned %v", resp.Status)
-	}
-
-	return resp.Body, nil
-}
-
-func filterExchangeRates(c cube) []exchange {
-	var rates []exchange
+func filterExchangeRates(c ecb.Cube, currencies map[string]struct{}) []ecb.Exchange {
+	var rates []ecb.Exchange
 	for _, ex := range c.Exchanges {
-		if _, ok := desiredCurrencies[ex.Currency]; ok {
+		if _, ok := currencies[ex.Currency]; ok {
 			rates = append(rates, ex)
 		}
 	}
@@ -98,30 +70,33 @@ func updateExchangeRates(data io.Reader) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	var e envelop
-	decoder := xml.NewDecoder(data)
-	if err := decoder.Decode(&e); err != nil {
-		return err
-	}
+	cubes, _ := ecb.Parse(data)
 
-	for _, c := range e.Cubes {
+	for _, c := range cubes {
+		// because we're using a historic data source the data never changes once it's read
 		if _, ok := exchangeRates[c.Date]; !ok {
-			exchangeRates[c.Date] = filterExchangeRates(c)
+			exchangeRates[c.Date] = filterExchangeRates(c, desiredCurrencies)
 		}
 	}
-
-	runtime.GC()
 
 	return nil
 }
 
 func updateExchangeRatesCache() {
-	if reader, err := downloadExchangeRates(); err != nil {
-		fmt.Printf("Unable to download exchange rates. Is the URL correct?")
-	} else {
-		if err := updateExchangeRates(reader); err != nil {
-			fmt.Printf("Failed to update exchange rates: %v", err)
-		}
+	resp, err := http.Get(eurHistURL)
+
+	if err != nil {
+		log.Printf("Unable to download exchange rates: %q", err)
+		return
+	}
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("HTTP request returned %q", resp.Status)
+		return
+	}
+	defer resp.Body.Close()
+
+	if err := updateExchangeRates(resp.Body); err != nil {
+		log.Printf("Failed to update exchange rates: %v", err)
 	}
 }
 
@@ -134,7 +109,7 @@ func populateExchangeRateCache(file string) error {
 	return updateExchangeRates(f)
 }
 
-func exchangeRatesByCurrency(rates []exchange) map[string]float32 {
+func exchangeRatesByCurrency(rates []ecb.Exchange) map[string]float32 {
 	var mappedByCurrency = make(map[string]float32)
 	for _, rate := range rates {
 		mappedByCurrency[rate.Currency] = rate.Rate
@@ -143,9 +118,7 @@ func exchangeRatesByCurrency(rates []exchange) map[string]float32 {
 }
 
 var (
-	// accept strings like /1986-09-03 and /1986-09-03/USD
-	routingRegexp      = regexp.MustCompile(`/(\d{4}-\d{2}-\d{2})/?$`)
-	errRouting         = fmt.Errorf("Routing mismatch. Expected %v", routingRegexp)
+	errRouting         = fmt.Errorf("Routing mismatch. Must be a date of form YYYY-MM-DD")
 	errNoDataAvailable = fmt.Errorf("No data available for requested date")
 )
 
@@ -187,21 +160,18 @@ func (f httpFunc) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveExchangeRates(w http.ResponseWriter, req *http.Request) (int, error) {
-	if !routingRegexp.MatchString(req.URL.Path) {
-		return http.StatusBadRequest, errRouting
+	requestedDate := req.URL.Path[1:]
+	if strings.HasSuffix(requestedDate, "/") {
+		requestedDate = requestedDate[:len(requestedDate)-1]
 	}
-
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", cacheControl))
-
-	parts := routingRegexp.FindAllStringSubmatch(req.URL.Path, -1)[0]
-	requestedDate := parts[1]
-
 	// force clients to pass valid dates in correct format
 	date, err := time.Parse("2006-01-02", requestedDate)
 	if err != nil {
 		return http.StatusBadRequest, err
 	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", cacheControl))
 
 	mu.RLock()
 	defer mu.RUnlock()
@@ -248,14 +218,6 @@ func newCurrencyExchangeServer() http.Handler {
 	return http.Handler(r)
 }
 
-func updateExchangeRatesPeriodically() {
-	for {
-		time.Sleep(1 * time.Hour)
-
-		updateExchangeRatesCache()
-	}
-}
-
 // Set by make file on build
 var (
 	Version string
@@ -284,7 +246,13 @@ func main() {
 		fmt.Printf("Unable to populate cache: %v", err)
 		os.Exit(-1)
 	}
-	go updateExchangeRatesPeriodically()
+	go func() {
+		for {
+			time.Sleep(6 * time.Hour)
+
+			updateExchangeRatesCache()
+		}
+	}()
 
 	log.Printf("listening on %v", *httpAddress)
 	log.Fatal(http.ListenAndServe(*httpAddress, logHandler(newCurrencyExchangeServer())))

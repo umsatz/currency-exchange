@@ -21,7 +21,7 @@ archive: dist/$(ARCHIVE)
 all: compile build
 
 compile: data/eurofxref-hist.xml
-	docker run --rm -v "$(PWD)":/usr/src/currency-exchange -w /usr/src/currency-exchange -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=amd64 $(GO) go build -a --installsuffix cgo $(LDFLAGS) -v
+	docker run --rm -v "$(PWD)":/go/src/github.com/umsatz/currency-exchange -w /go/src/github.com/umsatz/currency-exchange -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=amd64 $(GO) go build -a --installsuffix cgo $(LDFLAGS) -v
 
 clean:
 	rm currency-exchange
@@ -30,4 +30,4 @@ build: compile
 	docker build -t currency-exchange:$(VERSION) .
 
 test: data/eurofxref-hist.xml
-	docker run --rm -v "$(PWD)":/usr/src/currency-exchange -w /usr/src/currency-exchange $(GO) go test -v .
+	docker run --rm -v "$(PWD)":/go/src/github.com/umsatz/currency-exchange -w /go/src/github.com/umsatz/currency-exchange $(GO) go test -v .

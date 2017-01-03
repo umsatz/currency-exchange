@@ -5,11 +5,12 @@ RUN adduser -u 1001 -D user \
   && mkdir -p $HOME/data \
   && chown -R user:user $HOME
 
-COPY currency-exchange $HOME/
 RUN wget -O $HOME/data/eurofxref-hist.xml http://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml
 
 WORKDIR $HOME
 VOLUME $HOME/data
+
+COPY currency-exchange $HOME/
 
 USER user
 EXPOSE 8080
