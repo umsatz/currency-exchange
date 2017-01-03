@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+
+	rateHTTP "github.com/umsatz/currency-exchange/http"
 )
 
 type testServer struct {
@@ -17,14 +19,21 @@ type testServer struct {
 var TestServer testServer
 
 func TestMain(m *testing.M) {
-	if err := populateExchangeRateCache("data/eurofxref-hist.xml"); err != nil {
+	cache, err := populateExchangeRateCache("data/eurofxref-hist.xml")
+	if err != nil {
 		log.Fatalf("Unable to populate cache: %v\n", err)
 	}
+
 	TestServer = testServer{
-		server: httptest.NewServer(newCurrencyExchangeServer()),
+		server: httptest.NewServer(http.Handler(rateHTTP.Handler(cache))),
 	}
 	ret := m.Run()
 	os.Exit(ret)
+}
+
+type exchangeResponse struct {
+	Date  string             `json:"date"`
+	Rates map[string]float32 `json:"rates"`
 }
 
 type requestExpectation struct {
