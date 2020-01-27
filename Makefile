@@ -11,7 +11,7 @@ LDFLAGS    := -ldflags \
 .PHONY: default download
 
 data/eurofxref-hist.xml:
-	curl http://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml -o data/eurofxref-hist.xml
+	curl https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml -o data/eurofxref-hist.xml
 
 default: *.go
 	$(GOBUILD)
@@ -21,13 +21,10 @@ archive: dist/$(ARCHIVE)
 all: compile build
 
 compile: data/eurofxref-hist.xml
-	docker run --rm -v "$(PWD)":/go/src/github.com/umsatz/currency-exchange -w /go/src/github.com/umsatz/currency-exchange -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=amd64 $(GO) go build -a --installsuffix cgo $(LDFLAGS) -v
+	go build -a --installsuffix cgo $(LDFLAGS) -v
 
 clean:
 	rm currency-exchange
 
-build: compile
-	docker build -t currency-exchange:$(VERSION) .
-
 test: data/eurofxref-hist.xml
-	docker run --rm -v "$(PWD)":/go/src/github.com/umsatz/currency-exchange -w /go/src/github.com/umsatz/currency-exchange $(GO) go test -v .
+	go test -v .

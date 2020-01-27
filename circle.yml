@@ -1,13 +1,11 @@
-machine:
-  services:
-    - docker
-
-dependencies:
-  cache_directories:
-    - data
-  override:
-    - echo "Ignore CircleCI defaults"
-
-test:
-  override:
-    - make test
+version: 2
+jobs: 
+  build: 
+    docker:
+      - image: circleci/golang:1.13.6-stretch
+    working_directory: /go
+    steps:
+      - run: go get github.com/umsatz/currency-exchange
+      - run: |
+          cd /go/src/github.com/umsatz/currency-exchange
+          make test
