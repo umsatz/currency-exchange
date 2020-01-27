@@ -50,8 +50,8 @@ var (
 		// "ZAR": struct{}{},
 	}
 
-	// last 90 days are available at http://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml
-	eurHistURL = "http://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml"
+	// last 90 days are available at https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml
+	eurHistURL = "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml"
 )
 
 func filterExchangeRates(c ecb.Cube, currencies map[string]struct{}) []ecb.Exchange {
