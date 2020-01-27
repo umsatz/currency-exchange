@@ -1,4 +1,4 @@
-GO         ?= golang:1.7.4-onbuild
+GO         ?= golang:1.13-alpine
 COMMIT     := $(shell git rev-parse --short HEAD)
 VERSION    := $(shell git describe --abbrev=0 --tags)
 
